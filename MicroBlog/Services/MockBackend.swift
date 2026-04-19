@@ -66,6 +66,17 @@ actor MockBackend: BackendService {
             }
         }
 
+        // A hand-built page using a bundled mock photo, on a followed user's
+        // page so it lands in the feed.
+        if let photoPage = makeBundledPhotoPage(for: seedUsers[1], on: today) {
+            // Replace any random page that was generated for the same day to keep
+            // one-page-per-day invariant.
+            pages.values
+                .filter { $0.authorId == seedUsers[1].id && $0.day == today }
+                .forEach { pages.removeValue(forKey: $0.id) }
+            pages[photoPage.id] = photoPage
+        }
+
         // Seed a handful of notifications for the current user.
         let firstFollowed = followGraph[currentUserId]?.first
         let canned: [PageNotification] = [
@@ -156,6 +167,68 @@ actor MockBackend: BackendService {
                                "thinking about lattices", "rewatched a film",
                                "wrote one sentence", "no notes",
                                "the cat helped", "a small win"]
+
+    /// A hand-crafted page anchored on a bundled photo. Returns nil if the
+    /// image file isn't bundled (e.g. before `xcodegen generate`).
+    private func makeBundledPhotoPage(for author: User, on day: Date) -> Page? {
+        guard let (data, size) = bundledImage(named: "Frank_Ocean_1", ext: "jpg") else {
+            return nil
+        }
+
+        let maxSide: CGFloat = 240
+        let aspect = size.width / max(size.height, 1)
+        let (w, h): (Double, Double) = aspect >= 1
+            ? (maxSide, maxSide / aspect)
+            : (maxSide * aspect, maxSide)
+
+        var z: Double = 0
+        var elements: [PageElement] = []
+
+        elements.append(.init(
+            authorId: author.id,
+            content: .text(TextContent(text: "blonded", font: .serif, color: .ink, size: 30)),
+            position: .init(x: 0.50, y: 0.12), rotation: 0, scale: 1, zIndex: z
+        )); z += 1
+
+        elements.append(.init(
+            authorId: author.id,
+            content: .tape(TapeContent(color: .peach, width: 140, height: 22)),
+            position: .init(x: 0.30, y: 0.30), rotation: -0.45, scale: 1, zIndex: z
+        )); z += 1
+
+        elements.append(.init(
+            authorId: author.id,
+            content: .image(ImageContent(data: data, width: w, height: h)),
+            position: .init(x: 0.50, y: 0.50),
+            rotation: -0.04, scale: 1, zIndex: z
+        )); z += 1
+
+        elements.append(.init(
+            authorId: author.id,
+            content: .sticker(StickerContent(sticker: .music, tint: .lilac, size: 44)),
+            position: .init(x: 0.82, y: 0.40), rotation: 0.3, scale: 1, zIndex: z
+        )); z += 1
+
+        elements.append(.init(
+            authorId: author.id,
+            content: .text(TextContent(text: "on repeat all week", font: .handwritten,
+                                       color: .ink, size: 18)),
+            position: .init(x: 0.50, y: 0.86), rotation: 0.04, scale: 1, zIndex: z
+        ))
+
+        return Page(authorId: author.id, day: day, theme: .warmPaper, elements: elements)
+    }
+
+    /// Loads a bundled image file from `Bundle.main` and returns its raw data
+    /// + intrinsic size. Returns nil if the resource isn't present.
+    private func bundledImage(named name: String, ext: String) -> (Data, CGSize)? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: ext),
+              let data = try? Data(contentsOf: url),
+              let img = UIImage(data: data) else {
+            return nil
+        }
+        return (data, img.size)
+    }
 
     // MARK: - Reads
 
