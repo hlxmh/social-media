@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 
 @MainActor
 final class AppState: ObservableObject {
@@ -27,18 +26,5 @@ final class AppState: ObservableObject {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
         }
-    }
-}
-
-// MARK: - Environment
-
-private struct BackendKey: EnvironmentKey {
-    static let defaultValue: BackendService = MockBackend()
-}
-
-extension EnvironmentValues {
-    var backend: BackendService {
-        get { self[BackendKey.self] }
-        set { self[BackendKey.self] = newValue }
     }
 }

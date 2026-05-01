@@ -6,7 +6,7 @@ final class FeedViewModel: ObservableObject {
     enum LoadState { case idle, loading, loaded, failed(String) }
 
     @Published private(set) var state: LoadState = .idle
-    @Published private(set) var pages: [Page] = []
+    @Published private(set) var posts: [Post] = []
     @Published private(set) var authors: [UUID: User] = [:]
 
     let backend: BackendService
@@ -19,7 +19,7 @@ final class FeedViewModel: ObservableObject {
         state = .loading
         do {
             let fetched = try await backend.feed()
-            pages = fetched
+            posts = fetched
             await hydrateAuthors(for: fetched)
             state = .loaded
         } catch {
@@ -29,8 +29,8 @@ final class FeedViewModel: ObservableObject {
 
     func refresh() async { await load() }
 
-    private func hydrateAuthors(for pages: [Page]) async {
-        let missing = Set(pages.map(\.authorId)).subtracting(authors.keys)
+    private func hydrateAuthors(for posts: [Post]) async {
+        let missing = Set(posts.map(\.authorId)).subtracting(authors.keys)
         for id in missing {
             if let u = try? await backend.user(withId: id) { authors[id] = u }
         }

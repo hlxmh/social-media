@@ -3,27 +3,18 @@ import Foundation
 protocol BackendService: AnyObject, Sendable {
     var currentUser: User { get }
 
-    // Pages
-    func todayPage() async throws -> Page
-    func page(byAuthor authorId: UUID, on day: Date) async throws -> Page?
-    func page(withId id: UUID) async throws -> Page?
-    func pages(byAuthor authorId: UUID) async throws -> [Page]
+    // Posts
+    func todayPost() async throws -> Post
+    func post(byAuthor authorId: UUID, on day: Date) async throws -> Post?
+    func post(withId id: UUID) async throws -> Post?
+    func posts(byAuthor authorId: UUID) async throws -> [Post]
 
-    /// Pages from people the current user follows + the current user, newest first.
-    func feed() async throws -> [Page]
+    /// Posts from people the current user follows + the current user, newest first.
+    func feed() async throws -> [Post]
 
-    /// Replace today's page contents (theme + own elements) for the current user.
-    /// Reactions placed by other users are preserved.
+    /// Replace today's post for the current user with the given collages.
     @discardableResult
-    func saveTodayPage(theme: PageTheme, ownElements: [PageElement]) async throws -> Page
-
-    /// Add a reaction (sticker or comment) to someone else's page.
-    @discardableResult
-    func addReaction(to pageId: UUID, element: PageElement) async throws -> Page
-
-    /// Remove your own reaction.
-    @discardableResult
-    func removeReaction(elementId: UUID, on pageId: UUID) async throws -> Page
+    func saveTodayPost(collages: [Collage]) async throws -> Post
 
     // Users
     func user(withId id: UUID) async throws -> User?
@@ -37,7 +28,7 @@ protocol BackendService: AnyObject, Sendable {
     func followingIds() async -> Set<UUID>
 
     // Notifications
-    func notifications() async throws -> [PageNotification]
+    func notifications() async throws -> [AppNotification]
     func markNotificationsRead() async
     func unreadNotificationCount() async -> Int
 }

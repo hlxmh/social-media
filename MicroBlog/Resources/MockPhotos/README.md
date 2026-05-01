@@ -50,6 +50,6 @@ For consistency, prefer option 1.
 ## Conventions
 
 - Square or 4:5 portraits work best on a scrapbook page.
-- Keep each image under ~500 KB; the editor downsamples larger uploads
-  anyway when storing them in `ImageContent`.
+- Keep each image under ~500 KB; smaller images keep the in-memory mock
+  backend snappy.
 - Don't commit photos you don't have the rights to redistribute.

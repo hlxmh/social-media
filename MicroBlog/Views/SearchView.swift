@@ -64,3 +64,13 @@ private struct UserRow: View {
         .padding(.vertical, 4)
     }
 }
+
+#if DEBUG
+#Preview("Find people") {
+    PreviewScaffold.WithAppState {
+        NavigationStack {
+            SearchView(backend: PreviewScaffold.backend)
+        }
+    }
+}
+#endif

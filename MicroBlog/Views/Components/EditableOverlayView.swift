@@ -1,13 +1,12 @@
 import SwiftUI
 
-/// An element on the editor canvas that can be dragged, scaled and rotated.
-/// Position/scale/rotation are written back to the view model on each gesture change.
-struct EditableElementView: View {
-    @Binding var element: PageElement
+/// An overlay element on the editor canvas that can be dragged, scaled, and
+/// rotated. Position/scale/rotation write back into the bound element.
+struct EditableOverlayView: View {
+    @Binding var element: OverlayElement
     let canvasSize: CGSize
     let isSelected: Bool
     let onTap: () -> Void
-    let onDoubleTap: () -> Void
     let onDelete: () -> Void
 
     @State private var dragStart: CGPoint? = nil
@@ -16,11 +15,12 @@ struct EditableElementView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            ElementRenderer(element: element, canvasSize: canvasSize)
+            OverlayElementView(element: element, canvasSize: canvasSize)
                 .padding(8)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.accentColor, lineWidth: isSelected ? 1.5 : 0)
+                        .strokeBorder(Color.accentColor,
+                                      lineWidth: isSelected ? 1.5 : 0)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
                                 .fill(isSelected ? Color.accentColor.opacity(0.06) : Color.clear)
@@ -39,15 +39,12 @@ struct EditableElementView: View {
                 .offset(x: 10, y: -10)
             }
         }
-        .position(
-            x: element.position.x * canvasSize.width,
-            y: element.position.y * canvasSize.height
-        )
+        .position(x: element.position.x * canvasSize.width,
+                  y: element.position.y * canvasSize.height)
         .gesture(dragGesture)
-        .simultaneousGesture(magnificationGesture)
-        .simultaneousGesture(rotationGesture)
-        .onTapGesture(count: 2) { onDoubleTap() }
-        .onTapGesture(count: 1) { onTap() }
+        .simultaneousGesture(magnifyGesture)
+        .simultaneousGesture(rotateGesture)
+        .onTapGesture { onTap() }
         .zIndex(element.zIndex)
     }
 
@@ -66,7 +63,7 @@ struct EditableElementView: View {
             .onEnded { _ in dragStart = nil }
     }
 
-    private var magnificationGesture: some Gesture {
+    private var magnifyGesture: some Gesture {
         MagnifyGesture()
             .onChanged { value in
                 if scaleStart == nil { scaleStart = element.scale }
@@ -76,7 +73,7 @@ struct EditableElementView: View {
             .onEnded { _ in scaleStart = nil }
     }
 
-    private var rotationGesture: some Gesture {
+    private var rotateGesture: some Gesture {
         RotateGesture()
             .onChanged { value in
                 if rotationStart == nil { rotationStart = element.rotation }
@@ -85,7 +82,6 @@ struct EditableElementView: View {
             }
             .onEnded { _ in rotationStart = nil }
     }
-
 }
 
 private func clamp<T: Comparable>(_ x: T, _ lo: T, _ hi: T) -> T { min(max(x, lo), hi) }

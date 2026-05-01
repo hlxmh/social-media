@@ -2,8 +2,6 @@ import SwiftUI
 
 struct FeedView: View {
     @StateObject private var viewModel: FeedViewModel
-    @EnvironmentObject private var appState: AppState
-    @State private var followingIds: Set<UUID> = []
 
     init(backend: BackendService) {
         _viewModel = StateObject(wrappedValue: FeedViewModel(backend: backend))
@@ -20,11 +18,11 @@ struct FeedView: View {
                 EmptyStateView(title: "Couldn't load",
                                subtitle: message,
                                systemImage: "exclamationmark.triangle")
-            } else if viewModel.pages.isEmpty {
+            } else if viewModel.posts.isEmpty {
                 if case .loaded = viewModel.state {
                     EmptyStateView(title: "Quiet day",
-                                   subtitle: "Pages from people you follow will appear here.",
-                                   systemImage: "book.pages")
+                                   subtitle: "Posts from people you follow will appear here.",
+                                   systemImage: "rectangle.stack")
                 } else {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -32,12 +30,12 @@ struct FeedView: View {
                 grid
             }
         }
-        .navigationTitle("Pages")
+        .navigationTitle("Today")
         .navigationBarTitleDisplayMode(.large)
-        .navigationDestination(for: PageRoute.self) { route in
+        .navigationDestination(for: PostRoute.self) { route in
             switch route {
             case .detail(let id):
-                PageDetailView(pageId: id, backend: viewModel.backend)
+                PostDetailView(postId: id, backend: viewModel.backend)
             }
         }
         .navigationDestination(for: UserRoute.self) { route in
@@ -48,25 +46,19 @@ struct FeedView: View {
         }
         .task {
             if case .idle = viewModel.state { await viewModel.load() }
-            followingIds = await viewModel.backend.followingIds()
         }
-        .refreshable {
-            await viewModel.refresh()
-            followingIds = await viewModel.backend.followingIds()
-        }
+        .refreshable { await viewModel.refresh() }
     }
 
     private var grid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 24) {
-                ForEach(Array(viewModel.pages.enumerated()), id: \.element.id) { idx, page in
-                    NavigationLink(value: PageRoute.detail(page.id)) {
-                        PolaroidThumbnailView(
-                            page: page,
-                            author: viewModel.authors[page.authorId],
-                            tilt: idx.isMultiple(of: 2) ? -1.5 : 1.5,
-                            showReactions: true,
-                            visibleReactionAuthors: visibleReactionAuthors
+                ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { idx, post in
+                    NavigationLink(value: PostRoute.detail(post.id)) {
+                        PostThumbnailView(
+                            post: post,
+                            author: viewModel.authors[post.authorId],
+                            tilt: idx.isMultiple(of: 2) ? -1.5 : 1.5
                         )
                     }
                     .buttonStyle(.plain)
@@ -77,20 +69,17 @@ struct FeedView: View {
         }
         .scrollIndicators(.hidden)
     }
-
-    private var visibleReactionAuthors: Set<UUID> {
-        followingIds.union([appState.currentUser.id])
-    }
 }
 
-enum PageRoute: Hashable { case detail(UUID) }
+enum PostRoute: Hashable { case detail(UUID) }
 enum UserRoute: Hashable { case profile(UUID) }
 
 #if DEBUG
 #Preview("Feed") {
-    NavigationStack {
-        FeedView(backend: MockBackend())
+    PreviewScaffold.WithAppState {
+        NavigationStack {
+            FeedView(backend: PreviewScaffold.backend)
+        }
     }
-    .environmentObject(AppState())
 }
 #endif

@@ -19,18 +19,19 @@ struct ProfileView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         header(user: user)
-                        if viewModel.pages.isEmpty {
-                            EmptyStateView(title: "No pages yet",
-                                           subtitle: viewModel.isCurrentUser
-                                            ? "Tap the pencil to start today's page."
-                                            : "When \(user.displayName) posts, you'll see it here.",
-                                           systemImage: "book.pages")
+                        if viewModel.posts.isEmpty {
+                            EmptyStateView(
+                                title: "No posts yet",
+                                subtitle: viewModel.isCurrentUser
+                                    ? "Tap the editor to make today's first collage."
+                                    : "When \(user.displayName) posts, you'll see it here.",
+                                systemImage: "rectangle.stack")
                         } else {
                             LazyVGrid(columns: columns, spacing: 20) {
-                                ForEach(Array(viewModel.pages.enumerated()), id: \.element.id) { idx, page in
-                                    NavigationLink(value: PageRoute.detail(page.id)) {
-                                        PolaroidThumbnailView(
-                                            page: page,
+                                ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { idx, post in
+                                    NavigationLink(value: PostRoute.detail(post.id)) {
+                                        PostThumbnailView(
+                                            post: post,
                                             author: user,
                                             tilt: idx.isMultiple(of: 2) ? -1.5 : 1.5
                                         )
@@ -53,9 +54,9 @@ struct ProfileView: View {
         }
         .navigationTitle(viewModel.user?.handle ?? "")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: PageRoute.self) { route in
+        .navigationDestination(for: PostRoute.self) { route in
             switch route {
-            case .detail(let id): PageDetailView(pageId: id, backend: viewModel.backend)
+            case .detail(let id): PostDetailView(postId: id, backend: viewModel.backend)
             }
         }
         .navigationDestination(for: UserRoute.self) { route in
@@ -85,7 +86,7 @@ struct ProfileView: View {
                 Text(user.bio).font(.callout)
             }
             HStack(spacing: 18) {
-                Stat(count: viewModel.pages.count, label: "pages")
+                Stat(count: viewModel.posts.count, label: "posts")
                 Stat(count: user.followingCount, label: "following")
                 Stat(count: user.followersCount, label: "followers")
                 Spacer()
@@ -124,3 +125,14 @@ private struct FollowButton: View {
         .buttonStyle(.plain)
     }
 }
+
+#if DEBUG
+#Preview("My profile") {
+    PreviewScaffold.WithAppState {
+        NavigationStack {
+            ProfileView(userId: PreviewScaffold.backend.currentUser.id,
+                        backend: PreviewScaffold.backend)
+        }
+    }
+}
+#endif

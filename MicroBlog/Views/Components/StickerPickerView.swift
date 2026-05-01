@@ -75,3 +75,9 @@ struct StickerPickerView: View {
         )
     }
 }
+
+#if DEBUG
+#Preview("Sticker picker") {
+    StickerPickerView { _, _ in }
+}
+#endif

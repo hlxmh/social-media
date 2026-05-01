@@ -11,7 +11,7 @@ struct RootView: View {
         ZStack(alignment: .bottomTrailing) {
             TabView(selection: $selectedTab) {
                 NavigationStack { FeedView(backend: appState.backend) }
-                    .tabItem { Label("Pages", systemImage: "square.grid.2x2") }
+                    .tabItem { Label("Today", systemImage: "rectangle.stack") }
                     .tag(Tab.home)
 
                 NavigationStack { SearchView(backend: appState.backend) }
@@ -33,10 +33,10 @@ struct RootView: View {
             EditorFloatingButton { editorShown = true }
                 .padding(.trailing, 20)
                 .padding(.bottom, 70)
-                .accessibilityLabel("Open today's page")
+                .accessibilityLabel("Open today's post")
         }
         .sheet(isPresented: $editorShown) {
-            PageEditorView(backend: appState.backend)
+            PostEditorView(backend: appState.backend)
         }
     }
 }
@@ -45,7 +45,7 @@ private struct EditorFloatingButton: View {
     let action: () -> Void
     var body: some View {
         Button(action: action) {
-            Image(systemName: "pencil.and.scribble")
+            Image(systemName: "plus")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 56, height: 56)
@@ -64,6 +64,6 @@ private struct EditorFloatingButton: View {
 #if DEBUG
 #Preview("App") {
     RootView()
-        .environmentObject(AppState())
+        .environmentObject(PreviewScaffold.appState)
 }
 #endif

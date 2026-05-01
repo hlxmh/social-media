@@ -8,7 +8,6 @@ struct MicroBlogApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(appState)
-                .environment(\.backend, appState.backend)
                 .tint(.primary)
         }
     }

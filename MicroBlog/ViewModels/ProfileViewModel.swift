@@ -4,7 +4,7 @@ import SwiftUI
 @MainActor
 final class ProfileViewModel: ObservableObject {
     @Published private(set) var user: User?
-    @Published private(set) var pages: [Page] = []
+    @Published private(set) var posts: [Post] = []
     @Published private(set) var isFollowing = false
     @Published private(set) var isLoading = false
     @Published var error: String?
@@ -24,7 +24,7 @@ final class ProfileViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             user = try await backend.user(withId: userId)
-            pages = try await backend.pages(byAuthor: userId)
+            posts = try await backend.posts(byAuthor: userId)
             isFollowing = await backend.isFollowing(userId: userId)
         } catch {
             self.error = error.localizedDescription

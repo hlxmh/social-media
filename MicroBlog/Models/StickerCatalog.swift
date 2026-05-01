@@ -66,28 +66,3 @@ enum StickerTint: String, CaseIterable, Identifiable, Codable, Hashable, Sendabl
     }
 }
 
-/// Fonts available for text elements.
-enum PageFont: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
-    case handwritten, serif, sans, mono, rounded
-
-    var id: String { rawValue }
-    var displayName: String {
-        switch self {
-        case .handwritten: return "Marker"
-        case .serif:       return "Serif"
-        case .sans:        return "Sans"
-        case .mono:        return "Mono"
-        case .rounded:     return "Round"
-        }
-    }
-
-    func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        switch self {
-        case .handwritten: return .custom("Bradley Hand", size: size).weight(.bold)
-        case .serif:       return .system(size: size, weight: weight, design: .serif)
-        case .sans:        return .system(size: size, weight: weight, design: .default)
-        case .mono:        return .system(size: size, weight: weight, design: .monospaced)
-        case .rounded:     return .system(size: size, weight: weight, design: .rounded)
-        }
-    }
-}

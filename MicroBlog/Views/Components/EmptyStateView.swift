@@ -22,3 +22,11 @@ struct EmptyStateView: View {
         .padding(.horizontal, 32)
     }
 }
+
+#if DEBUG
+#Preview("Empty state") {
+    EmptyStateView(title: "Quiet day",
+                   subtitle: "Posts from people you follow will appear here.",
+                   systemImage: "rectangle.stack")
+}
+#endif

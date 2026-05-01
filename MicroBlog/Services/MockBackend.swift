@@ -1,28 +1,28 @@
 import Foundation
 import SwiftUI
 
-/// In-memory mock with seeded users and a few days of seeded pages.
+/// In-memory mock with seeded users and a few days of seeded posts.
 actor MockBackend: BackendService {
 
     // MARK: - State
 
     private var users: [UUID: User] = [:]
-    private var pages: [UUID: Page] = [:]
+    private var posts: [UUID: Post] = [:]
     private var followGraph: [UUID: Set<UUID>] = [:]
-    private var notificationsByUser: [UUID: [PageNotification]] = [:]
+    private var notificationsByUser: [UUID: [AppNotification]] = [:]
 
     let currentUserId: UUID
     private let _currentUserSnapshot: Snapshot<User>
 
     nonisolated var currentUser: User { _currentUserSnapshot.value }
 
-    // MARK: - Init / Seed
+    // MARK: - Init
 
     init() {
         let me = User(
             username: "you",
             displayName: "You",
-            bio: "Today's page is a work in progress.",
+            bio: "Today's post is a work in progress.",
             avatarHue: 0.58,
             joinedAt: Date().addingTimeInterval(-60 * 86_400),
             followersCount: 12,
@@ -55,251 +55,198 @@ actor MockBackend: BackendService {
         for u in seedUsers { users[u.id] = u }
         followGraph[currentUserId] = Set(seedUsers.dropFirst().prefix(3).map(\.id))
 
-        // Build sample pages for the last few days for a few users.
+        // Seed some posts using the bundled mock photos when available.
         let today = Date().dayKey
-        let dayOffsets = [0, -1, -2, -3]
+        let dayOffsets = [0, -1, -2]
         for user in seedUsers.dropFirst() {
             for offset in dayOffsets where Bool.random() {
                 let day = Calendar.current.date(byAdding: .day, value: offset, to: today)!
-                let page = makeSeedPage(for: user, on: day, allUsers: seedUsers)
-                pages[page.id] = page
+                if let post = makeSeedPost(for: user, on: day) {
+                    posts[post.id] = post
+                }
             }
         }
 
-        // A hand-built page using a bundled mock photo, on a followed user's
-        // page so it lands in the feed.
-        if let photoPage = makeBundledPhotoPage(for: seedUsers[1], on: today) {
-            // Replace any random page that was generated for the same day to keep
-            // one-page-per-day invariant.
-            pages.values
+        // Hand-built post anchored on the bundled "Frank_Ocean_1" photo, on a
+        // followed user's account so it lands in the feed.
+        if let photoPost = makeBundledPhotoPost(for: seedUsers[1], on: today) {
+            posts.values
                 .filter { $0.authorId == seedUsers[1].id && $0.day == today }
-                .forEach { pages.removeValue(forKey: $0.id) }
-            pages[photoPage.id] = photoPage
+                .forEach { posts.removeValue(forKey: $0.id) }
+            posts[photoPost.id] = photoPost
         }
 
-        // Seed a handful of notifications for the current user.
-        let firstFollowed = followGraph[currentUserId]?.first
-        let canned: [PageNotification] = [
-            PageNotification(kind: .follow, actorId: seedUsers[1].id, createdAt: Date().addingTimeInterval(-300)),
-            firstFollowed.map {
-                PageNotification(kind: .reaction, actorId: $0,
-                                 pageId: pages.values.first(where: { $0.authorId == currentUserId })?.id,
-                                 createdAt: Date().addingTimeInterval(-1_800))
-            }
-        ].compactMap { $0 }
-        notificationsByUser[currentUserId] = canned
+        // A couple of follow notifications.
+        notificationsByUser[currentUserId] = [
+            AppNotification(kind: .follow, actorId: seedUsers[1].id,
+                            createdAt: Date().addingTimeInterval(-300)),
+            AppNotification(kind: .follow, actorId: seedUsers[2].id,
+                            createdAt: Date().addingTimeInterval(-3_600), isRead: true)
+        ]
     }
 
-    private func makeSeedPage(for author: User, on day: Date, allUsers: [User]) -> Page {
-        let themes: [PageTheme] = [.warmPaper, .y2k, .dreamy, .zine, .midnight, .grid]
-        let theme = themes.randomElement() ?? .warmPaper
+    // MARK: - Seed builders
 
-        var elements: [PageElement] = []
-        var z: Double = 0
+    private func makeSeedPost(for author: User, on day: Date) -> Post? {
+        let presets: [LayoutPreset] = [.full, .twoVertical, .twoHorizontal, .fourGrid]
+        let preset = presets.randomElement()!
 
-        let titleColor = theme.defaultInk
-        elements.append(.init(
-            authorId: author.id,
-            content: .text(TextContent(
-                text: titlePool.randomElement()!,
-                font: [.handwritten, .serif, .rounded].randomElement()!,
-                color: titleColor,
-                size: Double.random(in: 26...36)
-            )),
-            position: .init(x: Double.random(in: 0.25...0.6), y: Double.random(in: 0.10...0.18)),
-            rotation: Double.random(in: -0.18...0.18),
-            scale: 1, zIndex: z
-        ))
-        z += 1
-
-        // A washi tape strip.
-        if Bool.random() {
-            elements.append(.init(
-                authorId: author.id,
-                content: .tape(TapeContent(
-                    color: [StickerTint.peach, .lemon, .mint, .lilac, .pink].randomElement()!,
-                    width: 180, height: 28
-                )),
-                position: .init(x: Double.random(in: 0.3...0.7), y: Double.random(in: 0.4...0.55)),
-                rotation: Double.random(in: -0.6...0.6),
-                scale: Double.random(in: 0.85...1.15), zIndex: z
-            ))
-            z += 1
+        let cellRects = preset.cellCount
+        var cells: [CollageCell] = []
+        for _ in 0..<cellRects {
+            cells.append(CollageCell(image: bundledPhotoData()))
         }
 
-        // A cluster of stickers.
-        for _ in 0..<Int.random(in: 2...5) {
-            elements.append(.init(
-                authorId: author.id,
+        let frame: FrameStyle = [.none, .polaroid, .filmStrip, .tornPaper].randomElement()!
+        let gutterColor: StickerTint = [.paper, .ink, .pink, .lemon, .mint].randomElement()!
+        let collage = Collage(
+            preset: preset,
+            cells: cells,
+            border: BorderStyle(frame: frame, gutterColor: gutterColor,
+                                gutterWidth: Double.random(in: 4...12)),
+            overlays: randomOverlays(),
+            text: captionPool.randomElement()!
+        )
+
+        // Some posts have a second collage to exercise the carousel.
+        var collages = [collage]
+        if Bool.random() {
+            let p2: LayoutPreset = [.full, .twoHorizontal].randomElement()!
+            let c2 = Collage(
+                preset: p2,
+                cells: (0..<p2.cellCount).map { _ in CollageCell(image: bundledPhotoData()) },
+                border: BorderStyle(frame: .polaroid, gutterColor: .paper, gutterWidth: 6),
+                overlays: randomOverlays(few: true),
+                text: captionPool.randomElement()!
+            )
+            collages.append(c2)
+        }
+
+        return Post(authorId: author.id, day: day, collages: collages)
+    }
+
+    private func randomOverlays(few: Bool = false) -> [OverlayElement] {
+        var overlays: [OverlayElement] = []
+        var z: Double = 0
+        let count = few ? Int.random(in: 0...2) : Int.random(in: 1...4)
+        for _ in 0..<count {
+            overlays.append(OverlayElement(
                 content: .sticker(StickerContent(
                     sticker: Sticker.allCases.randomElement()!,
                     tint: StickerTint.allCases.randomElement()!,
-                    size: Double.random(in: 36...64)
-                )),
+                    size: Double.random(in: 32...56))),
                 position: .init(x: Double.random(in: 0.15...0.85),
-                                y: Double.random(in: 0.25...0.85)),
-                rotation: Double.random(in: -0.5...0.5),
-                scale: 1, zIndex: z
+                                y: Double.random(in: 0.15...0.85)),
+                rotation: Double.random(in: -0.4...0.4),
+                zIndex: z
             ))
             z += 1
         }
-
-        // A short caption.
-        elements.append(.init(
-            authorId: author.id,
-            content: .text(TextContent(
-                text: captionPool.randomElement()!,
-                font: .handwritten,
-                color: titleColor,
-                size: 16
-            )),
-            position: .init(x: Double.random(in: 0.3...0.7), y: Double.random(in: 0.7...0.88)),
-            rotation: Double.random(in: -0.1...0.1),
-            scale: 1, zIndex: z
-        ))
-
-        return Page(authorId: author.id, day: day, theme: theme, elements: elements)
+        if Bool.random() {
+            overlays.append(OverlayElement(
+                content: .tape(TapeContent(
+                    color: [.peach, .lemon, .mint, .lilac, .pink].randomElement()!,
+                    width: 160, height: 24)),
+                position: .init(x: Double.random(in: 0.3...0.7),
+                                y: Double.random(in: 0.1...0.25)),
+                rotation: Double.random(in: -0.6...0.6),
+                zIndex: z
+            ))
+        }
+        return overlays
     }
 
-    private let titlePool = ["good morning", "today", "field notes", "scraps", "notebook",
-                             "soft focus", "sunday", "tiny things", "saw this", "playlist"]
-    private let captionPool = ["mood: gentle", "🌿 outside hours",
-                               "thinking about lattices", "rewatched a film",
-                               "wrote one sentence", "no notes",
-                               "the cat helped", "a small win"]
+    private let captionPool = [
+        "no notes",
+        "the small joys.",
+        "afternoon light, again.",
+        "thinking about lattices.",
+        "spent an hour learning a chord.",
+        "rewatched a film I love.",
+        "neighbors said hi for the first time."
+    ]
 
-    /// A hand-crafted page anchored on a bundled photo. Returns nil if the
-    /// image file isn't bundled (e.g. before `xcodegen generate`).
-    private func makeBundledPhotoPage(for author: User, on day: Date) -> Page? {
-        guard let (data, size) = bundledImage(named: "Frank_Ocean_1", ext: "jpg") else {
-            return nil
-        }
+    /// A hand-crafted post anchored on a bundled photo. Returns nil if the
+    /// image file isn't bundled.
+    private func makeBundledPhotoPost(for author: User, on day: Date) -> Post? {
+        guard let data = bundledPhotoData() else { return nil }
 
-        let maxSide: CGFloat = 240
-        let aspect = size.width / max(size.height, 1)
-        let (w, h): (Double, Double) = aspect >= 1
-            ? (maxSide, maxSide / aspect)
-            : (maxSide * aspect, maxSide)
-
-        var z: Double = 0
-        var elements: [PageElement] = []
-
-        elements.append(.init(
-            authorId: author.id,
-            content: .text(TextContent(text: "blonded", font: .serif, color: .ink, size: 30)),
-            position: .init(x: 0.50, y: 0.12), rotation: 0, scale: 1, zIndex: z
-        )); z += 1
-
-        elements.append(.init(
-            authorId: author.id,
-            content: .tape(TapeContent(color: .peach, width: 140, height: 22)),
-            position: .init(x: 0.30, y: 0.30), rotation: -0.45, scale: 1, zIndex: z
-        )); z += 1
-
-        elements.append(.init(
-            authorId: author.id,
-            content: .image(ImageContent(data: data, width: w, height: h)),
-            position: .init(x: 0.50, y: 0.50),
-            rotation: -0.04, scale: 1, zIndex: z
-        )); z += 1
-
-        elements.append(.init(
-            authorId: author.id,
-            content: .sticker(StickerContent(sticker: .music, tint: .lilac, size: 44)),
-            position: .init(x: 0.82, y: 0.40), rotation: 0.3, scale: 1, zIndex: z
-        )); z += 1
-
-        elements.append(.init(
-            authorId: author.id,
-            content: .text(TextContent(text: "on repeat all week", font: .handwritten,
-                                       color: .ink, size: 18)),
-            position: .init(x: 0.50, y: 0.86), rotation: 0.04, scale: 1, zIndex: z
-        ))
-
-        return Page(authorId: author.id, day: day, theme: .warmPaper, elements: elements)
+        let collage = Collage(
+            preset: .full,
+            cells: [CollageCell(image: data)],
+            border: BorderStyle(frame: .polaroid, gutterColor: .paper, gutterWidth: 8),
+            overlays: [
+                OverlayElement(
+                    content: .tape(TapeContent(color: .peach, width: 140, height: 22)),
+                    position: .init(x: 0.30, y: 0.08),
+                    rotation: -0.45, zIndex: 0),
+                OverlayElement(
+                    content: .sticker(StickerContent(sticker: .music, tint: .lilac, size: 44)),
+                    position: .init(x: 0.85, y: 0.92),
+                    rotation: 0.3, zIndex: 1)
+            ],
+            text: "blonded — on repeat all week. saturday afternoon, windows open."
+        )
+        return Post(authorId: author.id, day: day, collages: [collage])
     }
 
-    /// Loads a bundled image file from `Bundle.main` and returns its raw data
-    /// + intrinsic size. Returns nil if the resource isn't present.
-    private func bundledImage(named name: String, ext: String) -> (Data, CGSize)? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: ext),
-              let data = try? Data(contentsOf: url),
-              let img = UIImage(data: data) else {
+    /// Loads the bundled mock photo and returns its raw JPEG data, or nil if
+    /// the resource isn't present.
+    private func bundledPhotoData() -> Data? {
+        guard let url = Bundle.main.url(forResource: "Frank_Ocean_1", withExtension: "jpg") else {
             return nil
         }
-        return (data, img.size)
+        return try? Data(contentsOf: url)
     }
 
     // MARK: - Reads
 
-    func todayPage() async throws -> Page {
+    func todayPost() async throws -> Post {
         let day = Date().dayKey
-        if let existing = pages.values.first(where: { $0.authorId == currentUserId && $0.day == day }) {
+        if let existing = posts.values.first(where: { $0.authorId == currentUserId && $0.day == day }) {
             return existing
         }
-        let blank = Page(authorId: currentUserId, day: day, theme: .warmPaper, elements: [])
-        pages[blank.id] = blank
+        let blank = Post(authorId: currentUserId, day: day, collages: [])
+        posts[blank.id] = blank
         return blank
     }
 
-    func page(byAuthor authorId: UUID, on day: Date) async throws -> Page? {
+    func post(byAuthor authorId: UUID, on day: Date) async throws -> Post? {
         let key = day.dayKey
-        return pages.values.first { $0.authorId == authorId && $0.day == key }
+        return posts.values.first { $0.authorId == authorId && $0.day == key }
     }
 
-    func page(withId id: UUID) async throws -> Page? {
+    func post(withId id: UUID) async throws -> Post? {
         try await simulate()
-        return pages[id]
+        return posts[id]
     }
 
-    func pages(byAuthor authorId: UUID) async throws -> [Page] {
+    func posts(byAuthor authorId: UUID) async throws -> [Post] {
         try await simulate()
-        return pages.values.filter { $0.authorId == authorId }.sorted { $0.day > $1.day }
+        return posts.values
+            .filter { $0.authorId == authorId && !$0.collages.isEmpty }
+            .sorted { $0.day > $1.day }
     }
 
-    func feed() async throws -> [Page] {
+    func feed() async throws -> [Post] {
         try await simulate()
         let visible = (followGraph[currentUserId] ?? []).union([currentUserId])
-        return pages.values
-            .filter { visible.contains($0.authorId) && !$0.elements.isEmpty }
+        return posts.values
+            .filter { visible.contains($0.authorId) && !$0.collages.isEmpty }
             .sorted { $0.day > $1.day }
     }
 
     // MARK: - Mutations
 
-    func saveTodayPage(theme: PageTheme, ownElements: [PageElement]) async throws -> Page {
+    func saveTodayPost(collages: [Collage]) async throws -> Post {
         try await simulate()
         let day = Date().dayKey
-        var page = pages.values.first(where: { $0.authorId == currentUserId && $0.day == day })
-            ?? Page(authorId: currentUserId, day: day, theme: theme)
-        let reactions = page.reactions
-        page.theme = theme
-        page.elements = ownElements + reactions
-        page.updatedAt = Date()
-        pages[page.id] = page
-        return page
-    }
-
-    func addReaction(to pageId: UUID, element: PageElement) async throws -> Page {
-        try await simulate(short: true)
-        guard var page = pages[pageId] else { throw BackendError.notFound }
-        page.elements.append(element)
-        page.updatedAt = Date()
-        pages[pageId] = page
-        if page.authorId != currentUserId {
-            appendNotification(for: page.authorId,
-                               PageNotification(kind: .reaction, actorId: currentUserId, pageId: pageId))
-        }
-        return page
-    }
-
-    func removeReaction(elementId: UUID, on pageId: UUID) async throws -> Page {
-        try await simulate(short: true)
-        guard var page = pages[pageId] else { throw BackendError.notFound }
-        page.elements.removeAll { $0.id == elementId && $0.authorId == currentUserId }
-        page.updatedAt = Date()
-        pages[pageId] = page
-        return page
+        var post = posts.values.first(where: { $0.authorId == currentUserId && $0.day == day })
+            ?? Post(authorId: currentUserId, day: day)
+        post.collages = collages
+        post.updatedAt = Date()
+        posts[post.id] = post
+        return post
     }
 
     // MARK: - Users
@@ -315,7 +262,8 @@ actor MockBackend: BackendService {
         guard !q.isEmpty else { return [] }
         return users.values
             .filter { $0.id != currentUserId &&
-                ($0.username.lowercased().contains(q) || $0.displayName.lowercased().contains(q)) }
+                ($0.username.lowercased().contains(q) ||
+                 $0.displayName.lowercased().contains(q)) }
             .sorted { $0.followersCount > $1.followersCount }
     }
 
@@ -345,7 +293,7 @@ actor MockBackend: BackendService {
             mutateUser(userId) { $0.followersCount += 1 }
             mutateUser(currentUserId) { $0.followingCount += 1 }
             appendNotification(for: userId,
-                               PageNotification(kind: .follow, actorId: currentUserId))
+                AppNotification(kind: .follow, actorId: currentUserId))
         }
         followGraph[currentUserId] = following
         return nowFollowing
@@ -361,9 +309,10 @@ actor MockBackend: BackendService {
 
     // MARK: - Notifications
 
-    func notifications() async throws -> [PageNotification] {
+    func notifications() async throws -> [AppNotification] {
         try await simulate(short: true)
-        return (notificationsByUser[currentUserId] ?? []).sorted { $0.createdAt > $1.createdAt }
+        return (notificationsByUser[currentUserId] ?? [])
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
     func markNotificationsRead() {
@@ -385,7 +334,7 @@ actor MockBackend: BackendService {
         if id == currentUserId { _currentUserSnapshot.value = u }
     }
 
-    private func appendNotification(for userId: UUID, _ n: PageNotification) {
+    private func appendNotification(for userId: UUID, _ n: AppNotification) {
         var list = notificationsByUser[userId] ?? []
         list.append(n)
         notificationsByUser[userId] = list

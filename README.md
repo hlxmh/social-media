@@ -1,55 +1,62 @@
 # MicroBlog
 
-A daily-page micro-blog for iOS. Each user gets one scrapbook-style page per day — a freeform canvas for text, stickers, photos, washi tape, and doodles. Reactions from people you follow appear as stickers and comment bubbles right on the page; flip the eye-icon to see the clean version.
+A daily-collage photo journal for iOS. Each user has one **post per day**; a post is an ordered list of **collages**, each built from a fixed photo layout, decorated with stickers / tape / lines / doodles, and accompanied by its own free-form text body. Viewers swipe horizontally between collages.
 
 The backend is a fully in-memory mock (`MockBackend` actor) so the app runs end-to-end without any server.
 
+## Concepts
+
+- **Post**: one per author per day, holds an ordered `[Collage]`.
+- **Collage**: a 4:5 portrait canvas with a `LayoutPreset` (full / 2-stacked / 2-side / 4-grid), photo cells in those preset slots, a `BorderStyle` (frame style + gutter color/width), free-floating overlays (sticker, tape, doodle, straight line), and a text body.
+- **No "dead space" inside the canvas** — the preset's cells fill the entire collage, gutters and frame included.
+- **Reactions are intentionally absent** in this iteration; activity is follow-only.
+
 ## What you can do
 
-- **Make today's page**. Tap the floating compose button. Drop on text, stickers, photos (PhotosPicker), washi tape strips, or freehand doodles. Drag to move, pinch to scale, two-finger rotate. Pick from six page themes (Warm Paper, Y2K, Dreamy, Zine, Midnight, Grid). Pages are always editable — your daily page is more like a journal entry than a one-shot post.
-- **Browse pages from people you follow.** A Polaroid grid in the Pages tab; tap any page to expand it.
-- **React to other people's pages.** Drop a sticker or post a tiny comment bubble. Reactions are placed on the page itself, with a slight rotation. You can remove your own reactions at any time.
-- **Follower-only reactions.** Other people's reactions on a page are only visible to you if you follow them. The detail view shows "3 of 12 shown" so you know more is happening.
-- **Toggle reactions off** to see the page exactly as the author left it.
-- **Find people, follow them, get notified** when they react to your page or follow you.
+- **Compose today's post.** Pick a layout, drop photos into each cell (PhotosPicker), add stickers, washi tape, freehand doodles, and straight rule lines on top, write a journal entry below, and save. Add as many collages to today's post as you like; they appear as a swipeable carousel for viewers.
+- **Customize the look** with the border tool: choose an outer frame (none / Polaroid / filmstrip / torn paper) and a gutter color + width that paints between photos.
+- **Browse posts** from people you follow on the home grid; tap a post to open its carousel + read each collage's text section.
+- **Find people, follow them, get notified** when they follow you.
 
 ## App architecture
 
 ```
 MicroBlog/
 ├── App/
-│   ├── MicroBlogApp.swift      # @main, scene
+│   ├── MicroBlogApp.swift
 │   ├── AppState.swift          # @MainActor, holds backend + notification badge
-│   └── RootView.swift          # TabView shell + floating editor button
+│   └── RootView.swift          # TabView + floating editor button
 ├── Models/
 │   ├── User.swift
-│   ├── Page.swift              # one page per author per day
-│   ├── PageElement.swift       # element + content enum (text/sticker/image/tape/doodle)
-│   ├── PageTheme.swift         # six page backgrounds, all SwiftUI-native
-│   ├── StickerCatalog.swift    # curated SF Symbol + emoji set, tints, fonts
-│   ├── PageNotification.swift
+│   ├── Post.swift              # one per author per day
+│   ├── Collage.swift           # canvas: preset, cells, border, overlays, text
+│   ├── LayoutPreset.swift      # cell rects per layout
+│   ├── Border.swift            # FrameStyle + BorderStyle (gutter color/width)
+│   ├── OverlayElement.swift    # sticker, tape, doodle, straight line
+│   ├── StickerCatalog.swift    # curated stickers + tints
+│   ├── Notification.swift
 │   └── RelativeTime.swift
 ├── Services/
-│   ├── BackendService.swift    # protocol the UI talks to
-│   └── MockBackend.swift       # actor with seeded users, pages, follows, notifications
-├── ViewModels/                 # @MainActor, one per screen
+│   ├── BackendService.swift
+│   └── MockBackend.swift
+├── ViewModels/
 └── Views/
-    ├── FeedView.swift              # Polaroid grid
-    ├── PageDetailView.swift        # full page + reactions toggle
-    ├── PageEditorView.swift        # the canvas editor
-    ├── ProfileView.swift           # bio + grid of that user's pages
-    ├── SearchView.swift            # debounced people search
-    ├── NotificationsView.swift     # follows + reactions
+    ├── FeedView.swift              # thumbnail grid
+    ├── PostDetailView.swift        # carousel + per-collage text
+    ├── PostEditorView.swift        # composer
+    ├── ProfileView.swift
+    ├── SearchView.swift
+    ├── NotificationsView.swift
     └── Components/
-        ├── PageCanvasView.swift        # read-only renderer for a Page
-        ├── EditableElementView.swift   # draggable/scalable/rotatable wrapper
-        ├── PolaroidThumbnailView.swift # the card used in grids
+        ├── CollageView.swift           # read-only renderer for a Collage
+        ├── EditableOverlayView.swift   # drag/scale/rotate wrapper
+        ├── PostThumbnailView.swift     # card used in grids
         ├── StickerPickerView.swift
         ├── AvatarView.swift
         └── EmptyStateView.swift
 ```
 
-The page canvas uses **normalized coordinates (0...1 × 0...1)** for every element's position, so the same page renders at any size — feed thumbnail, full detail, profile grid — without re-layout.
+Photo cells use the layout preset's normalized rects (`0...1` in canvas space), so the same collage renders correctly at thumbnail, carousel, and detail sizes. Overlays use the same normalized positioning.
 
 ## Setup
 
@@ -62,7 +69,7 @@ xcodegen generate          # creates MicroBlog.xcodeproj from project.yml
 open MicroBlog.xcodeproj   # then Cmd-R
 ```
 
-If you'd rather not use XcodeGen: create a new iOS App in Xcode (Swift / SwiftUI / iOS 17), delete the generated `ContentView.swift` and `MicroBlogApp.swift`, then drag the `MicroBlog/` folder into the project navigator.
+Bundled mock photos in `MicroBlog/Resources/MockPhotos/` are used by the seeded posts so the feed has content even before the user adds any of their own.
 
 ## Swapping the backend
 

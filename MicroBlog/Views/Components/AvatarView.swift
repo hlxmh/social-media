@@ -15,3 +15,17 @@ struct AvatarView: View {
             )
     }
 }
+
+#if DEBUG
+#Preview("Avatars") {
+    HStack(spacing: 16) {
+        AvatarView(user: User(username: "ada", displayName: "Ada Lovelace",
+                              avatarHue: 0.05), size: 32)
+        AvatarView(user: User(username: "grace", displayName: "Grace Hopper",
+                              avatarHue: 0.55), size: 48)
+        AvatarView(user: User(username: "alan", displayName: "Alan Turing",
+                              avatarHue: 0.78), size: 72)
+    }
+    .padding(24)
+}
+#endif
