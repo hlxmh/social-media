@@ -29,6 +29,15 @@ final class FeedViewModel: ObservableObject {
 
     func refresh() async { await load() }
 
+    /// Call when the user taps a row to navigate into the post.
+    /// Updates the local copy immediately (dot disappears) and notifies the backend.
+    func markViewed(_ post: Post) {
+        if let idx = posts.firstIndex(where: { $0.id == post.id }) {
+            posts[idx].isViewedByCurrentUser = true
+        }
+        Task { await backend.markPostViewed(postId: post.id) }
+    }
+
     private func hydrateAuthors(for posts: [Post]) async {
         let missing = Set(posts.map(\.authorId)).subtracting(authors.keys)
         for id in missing {

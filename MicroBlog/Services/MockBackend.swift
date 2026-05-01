@@ -10,6 +10,8 @@ actor MockBackend: BackendService {
     private var posts: [UUID: Post] = [:]
     private var followGraph: [UUID: Set<UUID>] = [:]
     private var notificationsByUser: [UUID: [AppNotification]] = [:]
+    /// Set of post IDs the current user has viewed.
+    private var viewedPostIds: Set<UUID> = []
 
     let currentUserId: UUID
     private let _currentUserSnapshot: Snapshot<User>
@@ -218,7 +220,7 @@ actor MockBackend: BackendService {
 
     func post(withId id: UUID) async throws -> Post? {
         try await simulate()
-        return posts[id]
+        return posts[id].map { annotateViewed($0) }
     }
 
     func posts(byAuthor authorId: UUID) async throws -> [Post] {
@@ -230,10 +232,31 @@ actor MockBackend: BackendService {
 
     func feed() async throws -> [Post] {
         try await simulate()
-        let visible = (followGraph[currentUserId] ?? []).union([currentUserId])
-        return posts.values
-            .filter { visible.contains($0.authorId) && !$0.collages.isEmpty }
+        let following = followGraph[currentUserId] ?? []
+        // One post per followed author — their most recent only.
+        var latestByAuthor: [UUID: Post] = [:]
+        for post in posts.values {
+            guard following.contains(post.authorId),
+                  !post.collages.isEmpty else { continue }
+            if let existing = latestByAuthor[post.authorId] {
+                if post.day > existing.day { latestByAuthor[post.authorId] = post }
+            } else {
+                latestByAuthor[post.authorId] = post
+            }
+        }
+        return latestByAuthor.values
+            .map { annotateViewed($0) }
             .sorted { $0.day > $1.day }
+    }
+
+    func markPostViewed(postId: UUID) {
+        viewedPostIds.insert(postId)
+    }
+
+    private func annotateViewed(_ post: Post) -> Post {
+        var p = post
+        p.isViewedByCurrentUser = viewedPostIds.contains(post.id)
+        return p
     }
 
     // MARK: - Mutations

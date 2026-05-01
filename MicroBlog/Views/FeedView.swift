@@ -7,11 +7,6 @@ struct FeedView: View {
         _viewModel = StateObject(wrappedValue: FeedViewModel(backend: backend))
     }
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 18),
-        GridItem(.flexible(), spacing: 18)
-    ]
-
     var body: some View {
         Group {
             if case let .failed(message) = viewModel.state {
@@ -20,18 +15,25 @@ struct FeedView: View {
                                systemImage: "exclamationmark.triangle")
             } else if viewModel.posts.isEmpty {
                 if case .loaded = viewModel.state {
-                    EmptyStateView(title: "Quiet day",
-                                   subtitle: "Posts from people you follow will appear here.",
-                                   systemImage: "rectangle.stack")
+                    EmptyStateView(title: "Nothing yet",
+                                   subtitle: "Follow people to see their posts here.",
+                                   systemImage: "list.bullet.rectangle")
                 } else {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
-                grid
+                log
             }
         }
-        .navigationTitle("Today")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationTitle("Feed")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("FEED")
+                    .font(.system(.subheadline, design: .monospaced).weight(.bold))
+                    .kerning(2)
+            }
+        }
         .navigationDestination(for: PostRoute.self) { route in
             switch route {
             case .detail(let id):
@@ -50,22 +52,26 @@ struct FeedView: View {
         .refreshable { await viewModel.refresh() }
     }
 
-    private var grid: some View {
+    // MARK: - Log list
+
+    private var log: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 24) {
-                ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { idx, post in
+            LazyVStack(spacing: 2) {
+                ForEach(viewModel.posts) { post in
                     NavigationLink(value: PostRoute.detail(post.id)) {
-                        PostThumbnailView(
+                        LogRowView(
                             post: post,
-                            author: viewModel.authors[post.authorId],
-                            tilt: idx.isMultiple(of: 2) ? -1.5 : 1.5
+                            author: viewModel.authors[post.authorId]
                         )
                     }
                     .buttonStyle(.plain)
+                    .simultaneousGesture(TapGesture().onEnded {
+                        viewModel.markViewed(post)
+                    })
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 18)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
         }
         .scrollIndicators(.hidden)
     }

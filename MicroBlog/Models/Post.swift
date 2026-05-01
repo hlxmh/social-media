@@ -11,6 +11,8 @@ struct Post: Identifiable, Hashable, Sendable {
     var collages: [Collage]
     var createdAt: Date
     var updatedAt: Date
+    /// Set by the backend for the requesting user — true once they've opened this post.
+    var isViewedByCurrentUser: Bool
 
     init(
         id: UUID = UUID(),
@@ -18,7 +20,8 @@ struct Post: Identifiable, Hashable, Sendable {
         day: Date,
         collages: [Collage] = [],
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        isViewedByCurrentUser: Bool = false
     ) {
         self.id = id
         self.authorId = authorId
@@ -26,6 +29,7 @@ struct Post: Identifiable, Hashable, Sendable {
         self.collages = collages
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.isViewedByCurrentUser = isViewedByCurrentUser
     }
 
     var isEmpty: Bool { collages.isEmpty }

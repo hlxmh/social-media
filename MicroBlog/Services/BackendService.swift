@@ -16,6 +16,9 @@ protocol BackendService: AnyObject, Sendable {
     @discardableResult
     func saveTodayPost(collages: [Collage]) async throws -> Post
 
+    /// Record that the current user has opened this post. Clears the unread dot.
+    func markPostViewed(postId: UUID) async
+
     // Users
     func user(withId id: UUID) async throws -> User?
     func searchUsers(query: String) async throws -> [User]
