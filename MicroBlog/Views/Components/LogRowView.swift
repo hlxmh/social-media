@@ -2,32 +2,55 @@ import SwiftUI
 
 /// A single row in the digital-log feed. Compact, monospaced, block-y.
 ///
+/// The first collage photo bleeds across the full row background at low opacity.
 /// Layout (left → right):
-///   [ vertical bracket ] [ green dot ] [ mini thumb ] [ @handle  date  collage-count ]
+///   [ vertical bracket ] [ green dot ] [ @handle  date  collage-count ]
 struct LogRowView: View {
     let post: Post
     let author: User?
 
-    private static let thumbSize: CGFloat = 44
-    private static let monoFont = Font.system(.footnote, design: .monospaced)
+    private static let monoFont  = Font.system(.footnote, design: .monospaced)
     private static let monoSmall = Font.system(.caption2, design: .monospaced)
+
+    /// First non-empty photo across all collages, decoded for display.
+    private var coverImage: UIImage? {
+        for collage in post.collages {
+            for cell in collage.cells {
+                if let data = cell.image, let img = UIImage(data: data) { return img }
+            }
+        }
+        return nil
+    }
 
     var body: some View {
         HStack(spacing: 0) {
             bracket
             dot
-            thumbnail
             meta
             Spacer(minLength: 8)
         }
         .frame(minHeight: 56)
-        .background(rowBackground)
+        .background {
+            ZStack {
+                Color(.secondarySystemBackground)
+                if let img = coverImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .opacity(post.isViewedByCurrentUser ? 0.18 : 0.32)
+                }
+            }
+        }
+        .clipped()
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(.separator).opacity(0.35))
+                .frame(height: 0.5)
+        }
         .contentShape(Rectangle())
     }
 
-    // MARK: - Sub-views
-
-    /// Left-edge vertical accent bar — the "bracket" separator.
+    /// Left-edge vertical accent bar.
     private var bracket: some View {
         Rectangle()
             .fill(bracketColor)
@@ -40,7 +63,7 @@ struct LogRowView: View {
     private var bracketColor: Color {
         post.isViewedByCurrentUser
             ? Color.primary.opacity(0.15)
-            : Color(red: 0.18, green: 0.85, blue: 0.44)  // green
+            : Color(red: 0.18, green: 0.85, blue: 0.44)
     }
 
     /// Solid green dot for unseen posts; invisible placeholder when seen.
@@ -50,28 +73,6 @@ struct LogRowView: View {
             .frame(width: 6, height: 6)
             .opacity(post.isViewedByCurrentUser ? 0 : 1)
             .padding(.trailing, 8)
-    }
-
-    /// Small square thumbnail of the first collage's first photo cell.
-    private var thumbnail: some View {
-        ZStack {
-            Rectangle()
-                .fill(Color(.tertiarySystemFill))
-            if let data = post.collages.first?.cells.first?.image,
-               let img = UIImage(data: data) {
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Image(systemName: "photo")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(width: Self.thumbSize, height: Self.thumbSize)
-        .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-        .padding(.trailing, 12)
     }
 
     /// @handle, relative date, collage count — all monospaced.
@@ -94,14 +95,6 @@ struct LogRowView: View {
             }
         }
         .padding(.vertical, 10)
-    }
-
-    /// Alternating block background: primary-tinted for odd rows, clear for even.
-    /// The caller should pass the list index so we can alternate; for now a
-    /// single subtle fill keeps the "block" feel without needing row indexes here.
-    private var rowBackground: some View {
-        Color(.secondarySystemBackground)
-            .opacity(post.isViewedByCurrentUser ? 0.45 : 0.75)
     }
 }
 

@@ -89,6 +89,22 @@ drag the page dots) so users can reorder collages within a post and delete
 individual ones from a list. Reuse `viewModel.collages` array with a
 `.move(fromOffsets:toOffset:)` operation.
 
+## Video support
+Allow short videos in collage cells alongside photos. Scope:
+- Extend `CollageCell` from `image: Data?` to a richer `media: CellMedia`
+  enum (`.image(Data)` | `.video(url: URL, thumbnail: Data)`).
+- `PhotosPicker` already supports `.videos` and `.any(of: [.images, .videos])`
+  filters — switch the picker config and branch on the picked `PhotosPickerItem`'s
+  type.
+- `CollageCellView`: render a still image as today, plus an overlay play
+  button + autoplay-on-tap using `AVPlayerLayer` (or `VideoPlayer` from
+  AVKit) for video cells.
+- Thumbnail generation at pick time so `LogRowView` and profile grid stay
+  cheap (`AVAssetImageGenerator.copyCGImage(at: .zero)`).
+- Mute by default; tap-to-unmute in the detail view; loop short clips.
+- Cap clip length (e.g. 15s) and re-encode on import to keep mock backend
+  payloads sane.
+
 ## Polish the filmstrip frame
 The current `.filmStrip` frame uses HStacks of rounded rectangles for sprocket
 holes — visible seams when the canvas size doesn't divide evenly. Replace

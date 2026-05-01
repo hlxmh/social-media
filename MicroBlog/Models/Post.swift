@@ -38,6 +38,10 @@ struct Post: Identifiable, Hashable, Sendable {
 extension Date {
     var dayKey: Date { Calendar.current.startOfDay(for: self) }
 
+    func offset(days: Int) -> Date {
+        Calendar.current.date(byAdding: .day, value: days, to: self) ?? self
+    }
+
     /// "Today" / "Yesterday" / "MMM d".
     var pageDateLabel: String {
         let cal = Calendar.current

@@ -36,169 +36,248 @@ actor MockBackend: BackendService {
     }
 
     private func seed(me: User) {
-        let seedUsers: [User] = [
-            me,
-            User(username: "ada",      displayName: "Ada Lovelace",
-                 bio: "Notes on the Analytical Engine.",
-                 avatarHue: 0.05, followersCount: 4_213, followingCount: 88),
-            User(username: "grace",    displayName: "Grace Hopper",
-                 bio: "Nanoseconds, mostly.",
-                 avatarHue: 0.78, followersCount: 9_887, followingCount: 201),
-            User(username: "alan",     displayName: "Alan Turing",
-                 bio: "Out walking. Will think later.",
-                 avatarHue: 0.33, followersCount: 22_341, followingCount: 17),
-            User(username: "margaret", displayName: "Margaret Hamilton",
-                 bio: "Pioneers, by necessity.",
-                 avatarHue: 0.92, followersCount: 7_654, followingCount: 142),
-            User(username: "donald",   displayName: "Donald K.",
-                 bio: "Premature optimization is the root of all evil.",
-                 avatarHue: 0.46, followersCount: 18_902, followingCount: 6)
-        ]
-        for u in seedUsers { users[u.id] = u }
-        followGraph[currentUserId] = Set(seedUsers.dropFirst().prefix(3).map(\.id))
+        let ada      = User(username: "ada",      displayName: "Ada Lovelace",
+                            bio: "Notes on the Analytical Engine.",
+                            avatarHue: 0.05, followersCount: 4_213, followingCount: 88)
+        let grace    = User(username: "grace",    displayName: "Grace Hopper",
+                            bio: "Nanoseconds, mostly.",
+                            avatarHue: 0.78, followersCount: 9_887, followingCount: 201)
+        let alan     = User(username: "alan",     displayName: "Alan Turing",
+                            bio: "Out walking. Will think later.",
+                            avatarHue: 0.33, followersCount: 22_341, followingCount: 17)
+        let margaret = User(username: "margaret", displayName: "Margaret Hamilton",
+                            bio: "Pioneers, by necessity.",
+                            avatarHue: 0.92, followersCount: 7_654, followingCount: 142)
+        let donald   = User(username: "donald",   displayName: "Donald K.",
+                            bio: "Premature optimization is the root of all evil.",
+                            avatarHue: 0.46, followersCount: 18_902, followingCount: 6)
+        let katherine = User(username: "katherine", displayName: "Katherine Johnson",
+                             bio: "Run the numbers again.",
+                             avatarHue: 0.62, followersCount: 11_204, followingCount: 33)
+        let jean      = User(username: "jean",      displayName: "Jean Sammet",
+                             bio: "Languages are for people.",
+                             avatarHue: 0.18, followersCount: 3_440, followingCount: 95)
+        let allUsers = [me, ada, grace, alan, margaret, donald, katherine, jean]
+        for u in allUsers { users[u.id] = u }
 
-        // Seed some posts using the bundled mock photos when available.
+        // Current user follows ada, grace, alan, katherine, jean — their posts land in the feed.
+        followGraph[currentUserId] = [ada.id, grace.id, alan.id, katherine.id, jean.id]
+
         let today = Date().dayKey
-        let dayOffsets = [0, -1, -2]
-        for user in seedUsers.dropFirst() {
-            for offset in dayOffsets where Bool.random() {
-                let day = Calendar.current.date(byAdding: .day, value: offset, to: today)!
-                if let post = makeSeedPost(for: user, on: day) {
-                    posts[post.id] = post
-                }
-            }
-        }
+        let yesterday = today.offset(days: -1)
+        let twoDaysAgo = today.offset(days: -2)
+        let threeDaysAgo = today.offset(days: -3)
 
-        // Hand-built post anchored on the bundled "Frank_Ocean_1" photo, on a
-        // followed user's account so it lands in the feed.
-        if let photoPost = makeBundledPhotoPost(for: seedUsers[1], on: today) {
-            posts.values
-                .filter { $0.authorId == seedUsers[1].id && $0.day == today }
-                .forEach { posts.removeValue(forKey: $0.id) }
-            posts[photoPost.id] = photoPost
-        }
+        // ── ada ─────────────────────────────────────────────────────────────
+        // Today: two-collage post — Frank Ocean full-frame + a 2-up with 334/613
+        addPost(Post(authorId: ada.id, day: today, collages: [
+            Collage(
+                preset: .full,
+                cells: [CollageCell(image: photo("Frank_Ocean_1"))],
+                border: BorderStyle(frame: .polaroid, gutterColor: .paper, gutterWidth: 8),
+                overlays: [
+                    overlay(.tape(TapeContent(color: .peach, width: 140, height: 22)),
+                            at: .init(x: 0.30, y: 0.08), rot: -0.45, z: 0),
+                    overlay(.sticker(StickerContent(sticker: .music, tint: .lilac, size: 44)),
+                            at: .init(x: 0.85, y: 0.92), rot: 0.3, z: 1)
+                ],
+                text: "blonded — on repeat all week. saturday afternoon, windows open."
+            ),
+            Collage(
+                preset: .twoHorizontal,
+                cells: [CollageCell(image: photo("334-3024x4032")),
+                        CollageCell(image: photo("613-3000x4000"))],
+                border: BorderStyle(frame: .none, gutterColor: .paper, gutterWidth: 6),
+                overlays: [
+                    overlay(.sticker(StickerContent(sticker: .sun, tint: .lemon, size: 38)),
+                            at: .init(x: 0.82, y: 0.15), rot: 0.2, z: 0)
+                ],
+                text: "the light today was something else."
+            )
+        ]))
+
+        // Yesterday: full-frame 691
+        addPost(Post(authorId: ada.id, day: yesterday, collages: [
+            Collage(
+                preset: .full,
+                cells: [CollageCell(image: photo("691-2000x3000"))],
+                border: BorderStyle(frame: .filmStrip, gutterColor: .ink, gutterWidth: 10),
+                overlays: [
+                    overlay(.sticker(StickerContent(sticker: .star, tint: .pink, size: 36)),
+                            at: .init(x: 0.12, y: 0.88), rot: -0.3, z: 0)
+                ],
+                text: "found this place by accident. definitely going back."
+            )
+        ]))
+
+        // ── grace ────────────────────────────────────────────────────────────
+        // Today: four-grid with all four numbered photos
+        addPost(Post(authorId: grace.id, day: today, collages: [
+            Collage(
+                preset: .fourGrid,
+                cells: [CollageCell(image: photo("334-3024x4032")),
+                        CollageCell(image: photo("613-3000x4000")),
+                        CollageCell(image: photo("691-2000x3000")),
+                        CollageCell(image: photo("839-3024x4032"))],
+                border: BorderStyle(frame: .none, gutterColor: .mint, gutterWidth: 4),
+                overlays: [
+                    overlay(.tape(TapeContent(color: .mint, width: 120, height: 20)),
+                            at: .init(x: 0.5, y: 0.05), rot: 0.15, z: 0)
+                ],
+                text: "a few frames from the weekend. nothing special, everything special."
+            )
+        ]))
+
+        // Two days ago: vertical split 839 / 334
+        addPost(Post(authorId: grace.id, day: twoDaysAgo, collages: [
+            Collage(
+                preset: .twoVertical,
+                cells: [CollageCell(image: photo("839-3024x4032")),
+                        CollageCell(image: photo("334-3024x4032"))],
+                border: BorderStyle(frame: .polaroid, gutterColor: .paper, gutterWidth: 8),
+                overlays: [],
+                text: "rainy thursday. stayed in, made soup."
+            )
+        ]))
+
+        // ── alan ─────────────────────────────────────────────────────────────
+        // Today: two collages — full 839, then horizontal 613/691
+        addPost(Post(authorId: alan.id, day: today, collages: [
+            Collage(
+                preset: .full,
+                cells: [CollageCell(image: photo("839-3024x4032"))],
+                border: BorderStyle(frame: .tornPaper, gutterColor: .paper, gutterWidth: 0),
+                overlays: [
+                    overlay(.sticker(StickerContent(sticker: .leaf, tint: .mint, size: 42)),
+                            at: .init(x: 0.78, y: 0.20), rot: -0.5, z: 0)
+                ],
+                text: "walked for three hours. solved nothing. needed that."
+            ),
+            Collage(
+                preset: .twoHorizontal,
+                cells: [CollageCell(image: photo("613-3000x4000")),
+                        CollageCell(image: photo("691-2000x3000"))],
+                border: BorderStyle(frame: .none, gutterColor: .ink, gutterWidth: 6),
+                overlays: [],
+                text: "stopped twice."
+            )
+        ]))
+
+        // Yesterday: full Frank Ocean
+        addPost(Post(authorId: alan.id, day: yesterday, collages: [
+            Collage(
+                preset: .full,
+                cells: [CollageCell(image: photo("Frank_Ocean_1"))],
+                border: BorderStyle(frame: .none, gutterColor: .paper, gutterWidth: 0),
+                overlays: [],
+                text: "been thinking about this image for days."
+            )
+        ]))
+
+        // ── margaret (not followed — appears on search/profile, not feed) ───
+        addPost(Post(authorId: margaret.id, day: today, collages: [
+            Collage(
+                preset: .twoVertical,
+                cells: [CollageCell(image: photo("691-2000x3000")),
+                        CollageCell(image: photo("613-3000x4000"))],
+                border: BorderStyle(frame: .filmStrip, gutterColor: .lemon, gutterWidth: 8),
+                overlays: [],
+                text: "code review took five minutes. lunch took two hours. correct priorities."
+            )
+        ]))
+
+        // ── katherine (followed) — most recent post is yesterday → "1d" ─────
+        addPost(Post(authorId: katherine.id, day: yesterday, collages: [
+            Collage(
+                preset: .full,
+                cells: [CollageCell(image: photo("18-3024x4032"))],
+                border: BorderStyle(frame: .polaroid, gutterColor: .paper, gutterWidth: 8),
+                overlays: [
+                    overlay(.sticker(StickerContent(sticker: .star, tint: .lemon, size: 40)),
+                            at: .init(x: 0.18, y: 0.12), rot: -0.2, z: 0)
+                ],
+                text: "checked the math three times. checked it a fourth, just to be sure."
+            )
+        ]))
+
+        // Older post — proves dedup keeps only the most recent in the feed.
+        addPost(Post(authorId: katherine.id, day: threeDaysAgo, collages: [
+            Collage(
+                preset: .twoVertical,
+                cells: [CollageCell(image: photo("839-3024x4032")),
+                        CollageCell(image: photo("691-2000x3000"))],
+                border: BorderStyle(frame: .none, gutterColor: .ink, gutterWidth: 6),
+                overlays: [],
+                text: "field notes."
+            )
+        ]))
+
+        // ── jean (followed) — most recent post is 3 days ago → "3d" ─────────
+        addPost(Post(authorId: jean.id, day: threeDaysAgo, collages: [
+            Collage(
+                preset: .twoHorizontal,
+                cells: [CollageCell(image: photo("18-3024x4032")),
+                        CollageCell(image: photo("613-3000x4000"))],
+                border: BorderStyle(frame: .filmStrip, gutterColor: .ink, gutterWidth: 10),
+                overlays: [
+                    overlay(.tape(TapeContent(color: .lilac, width: 130, height: 22)),
+                            at: .init(x: 0.5, y: 0.07), rot: -0.2, z: 0)
+                ],
+                text: "drafted the syntax three times before it felt right. that's the work."
+            )
+        ]))
+
+        // ── donald (not followed) ─────────────────────────────────────────
+        addPost(Post(authorId: donald.id, day: yesterday, collages: [
+            Collage(
+                preset: .full,
+                cells: [CollageCell(image: photo("334-3024x4032"))],
+                border: BorderStyle(frame: .polaroid, gutterColor: .paper, gutterWidth: 10),
+                overlays: [
+                    overlay(.tape(TapeContent(color: .lemon, width: 150, height: 22)),
+                            at: .init(x: 0.35, y: 0.06), rot: 0.3, z: 0)
+                ],
+                text: "the real optimization was the friends we made along the way."
+            )
+        ]))
 
         // A couple of follow notifications.
         notificationsByUser[currentUserId] = [
-            AppNotification(kind: .follow, actorId: seedUsers[1].id,
+            AppNotification(kind: .follow, actorId: ada.id,
                             createdAt: Date().addingTimeInterval(-300)),
-            AppNotification(kind: .follow, actorId: seedUsers[2].id,
+            AppNotification(kind: .follow, actorId: grace.id,
                             createdAt: Date().addingTimeInterval(-3_600), isRead: true)
         ]
     }
 
-    // MARK: - Seed builders
+    // MARK: - Seed helpers
 
-    private func makeSeedPost(for author: User, on day: Date) -> Post? {
-        let presets: [LayoutPreset] = [.full, .twoVertical, .twoHorizontal, .fourGrid]
-        let preset = presets.randomElement()!
-
-        let cellRects = preset.cellCount
-        var cells: [CollageCell] = []
-        for _ in 0..<cellRects {
-            cells.append(CollageCell(image: bundledPhotoData()))
-        }
-
-        let frame: FrameStyle = [.none, .polaroid, .filmStrip, .tornPaper].randomElement()!
-        let gutterColor: StickerTint = [.paper, .ink, .pink, .lemon, .mint].randomElement()!
-        let collage = Collage(
-            preset: preset,
-            cells: cells,
-            border: BorderStyle(frame: frame, gutterColor: gutterColor,
-                                gutterWidth: Double.random(in: 4...12)),
-            overlays: randomOverlays(),
-            text: captionPool.randomElement()!
-        )
-
-        // Some posts have a second collage to exercise the carousel.
-        var collages = [collage]
-        if Bool.random() {
-            let p2: LayoutPreset = [.full, .twoHorizontal].randomElement()!
-            let c2 = Collage(
-                preset: p2,
-                cells: (0..<p2.cellCount).map { _ in CollageCell(image: bundledPhotoData()) },
-                border: BorderStyle(frame: .polaroid, gutterColor: .paper, gutterWidth: 6),
-                overlays: randomOverlays(few: true),
-                text: captionPool.randomElement()!
-            )
-            collages.append(c2)
-        }
-
-        return Post(authorId: author.id, day: day, collages: collages)
+    private func addPost(_ post: Post) {
+        posts[post.id] = post
     }
 
-    private func randomOverlays(few: Bool = false) -> [OverlayElement] {
-        var overlays: [OverlayElement] = []
-        var z: Double = 0
-        let count = few ? Int.random(in: 0...2) : Int.random(in: 1...4)
-        for _ in 0..<count {
-            overlays.append(OverlayElement(
-                content: .sticker(StickerContent(
-                    sticker: Sticker.allCases.randomElement()!,
-                    tint: StickerTint.allCases.randomElement()!,
-                    size: Double.random(in: 32...56))),
-                position: .init(x: Double.random(in: 0.15...0.85),
-                                y: Double.random(in: 0.15...0.85)),
-                rotation: Double.random(in: -0.4...0.4),
-                zIndex: z
-            ))
-            z += 1
-        }
-        if Bool.random() {
-            overlays.append(OverlayElement(
-                content: .tape(TapeContent(
-                    color: [.peach, .lemon, .mint, .lilac, .pink].randomElement()!,
-                    width: 160, height: 24)),
-                position: .init(x: Double.random(in: 0.3...0.7),
-                                y: Double.random(in: 0.1...0.25)),
-                rotation: Double.random(in: -0.6...0.6),
-                zIndex: z
-            ))
-        }
-        return overlays
+    /// Short-hand for building an OverlayElement in seed code.
+    private func overlay(_ content: OverlayContent, at pos: CGPoint,
+                         rot: Double, z: Double) -> OverlayElement {
+        OverlayElement(content: content, position: pos, rotation: rot, scale: 1, zIndex: z)
     }
 
-    private let captionPool = [
-        "no notes",
-        "the small joys.",
-        "afternoon light, again.",
-        "thinking about lattices.",
-        "spent an hour learning a chord.",
-        "rewatched a film I love.",
-        "neighbors said hi for the first time."
-    ]
-
-    /// A hand-crafted post anchored on a bundled photo. Returns nil if the
-    /// image file isn't bundled.
-    private func makeBundledPhotoPost(for author: User, on day: Date) -> Post? {
-        guard let data = bundledPhotoData() else { return nil }
-
-        let collage = Collage(
-            preset: .full,
-            cells: [CollageCell(image: data)],
-            border: BorderStyle(frame: .polaroid, gutterColor: .paper, gutterWidth: 8),
-            overlays: [
-                OverlayElement(
-                    content: .tape(TapeContent(color: .peach, width: 140, height: 22)),
-                    position: .init(x: 0.30, y: 0.08),
-                    rotation: -0.45, zIndex: 0),
-                OverlayElement(
-                    content: .sticker(StickerContent(sticker: .music, tint: .lilac, size: 44)),
-                    position: .init(x: 0.85, y: 0.92),
-                    rotation: 0.3, zIndex: 1)
-            ],
-            text: "blonded — on repeat all week. saturday afternoon, windows open."
-        )
-        return Post(authorId: author.id, day: day, collages: [collage])
-    }
-
-    /// Loads the bundled mock photo and returns its raw JPEG data, or nil if
-    /// the resource isn't present.
-    private func bundledPhotoData() -> Data? {
-        guard let url = Bundle.main.url(forResource: "Frank_Ocean_1", withExtension: "jpg") else {
-            return nil
+    /// Loads a bundled mock photo by resource name. Tries both the bundle root
+    /// and the MockPhotos subdirectory since XcodeGen may bundle the folder
+    /// either way depending on how files were added.
+    private func photo(_ name: String) -> Data? {
+        let extensions = ["jpg", "jpeg"]
+        let subdirectories: [String?] = [nil, "MockPhotos"]
+        for subdir in subdirectories {
+            for ext in extensions {
+                if let url = Bundle.main.url(forResource: name, withExtension: ext,
+                                             subdirectory: subdir),
+                   let data = try? Data(contentsOf: url) {
+                    return data
+                }
+            }
         }
-        return try? Data(contentsOf: url)
+        return nil
     }
 
     // MARK: - Reads
