@@ -12,6 +12,13 @@ struct LogRowView: View {
     private static let monoFont  = Font.system(.footnote, design: .monospaced)
     private static let monoSmall = Font.system(.caption2, design: .monospaced)
 
+    /// UIFont mirror of `monoSmall`, used by `MarqueeText` for deterministic
+    /// width measurement.
+    private static let monoSmallUIFont: UIFont = {
+        let size = UIFont.preferredFont(forTextStyle: .caption2).pointSize
+        return UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
+    }()
+
     /// First non-empty photo across all collages, decoded for display.
     private var coverImage: UIImage? {
         for collage in post.collages {
@@ -27,7 +34,6 @@ struct LogRowView: View {
             bracket
             dot
             meta
-            Spacer(minLength: 8)
         }
         .frame(minHeight: 56)
         .background {
@@ -75,7 +81,10 @@ struct LogRowView: View {
             .padding(.trailing, 8)
     }
 
-    /// @handle, relative date, collage count — all monospaced.
+    /// Three-line meta column:
+    ///   1. @handle                                 time
+    ///   2.                  scrolling text (right-aligned, fades on left)
+    ///   3. N collages   (only when multi-collage)
     private var meta: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
@@ -88,13 +97,158 @@ struct LogRowView: View {
                     .font(Self.monoSmall)
                     .foregroundStyle(.secondary)
             }
+            if let body = post.collages.first?.text, !body.isEmpty {
+                MarqueeText(text: body, uiFont: Self.monoSmallUIFont)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0.0),
+                                .init(color: .black, location: 0.18),
+                                .init(color: .black, location: 1.0)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+            }
             if post.collages.count > 1 {
                 Text("\(post.collages.count) collages")
                     .font(Self.monoSmall)
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 10)
+        .padding(.trailing, 12)
+    }
+}
+
+// MARK: - MarqueeText
+//
+// Architecture follows Monty Harper's MarqueeView pattern (Dec 2023): all the
+// state that drives the animation lives in an `ObservableObject` controller
+// outside the view. SwiftUI may reinitialize the View struct frequently —
+// e.g. during LazyVStack recycling, when sibling state changes, or when a
+// parent re-renders for unrelated reasons — but the controller persists via
+// `@StateObject`, so `startTime` is captured exactly once and the offset
+// keeps advancing through view rebuilds.
+
+/// Holds the timing state and width measurements for a single marquee.
+/// Widths are computed deterministically via UIFont rather than via async
+/// preference keys, so the controller is fully usable from the moment it's
+/// constructed.
+private final class MarqueeController: ObservableObject {
+    let text: String
+    let endMarker: String
+    let uiFont: UIFont
+    let speed: Double
+    let pauseDuration: Double
+
+    let textWidth: CGFloat
+    let cycleWidth: CGFloat
+
+    /// Captured exactly once when the controller is created. Survives all
+    /// view rebuilds since `@StateObject` keeps the same instance.
+    private let startTime = Date()
+
+    init(
+        text: String,
+        uiFont: UIFont,
+        endMarker: String = "   ·  END  ·   ",
+        speed: Double = 28,
+        pauseDuration: Double = 1.2
+    ) {
+        self.text = text
+        self.endMarker = endMarker
+        self.uiFont = uiFont
+        self.speed = speed
+        self.pauseDuration = pauseDuration
+        let attrs: [NSAttributedString.Key: Any] = [.font: uiFont]
+        self.textWidth = (text as NSString).size(withAttributes: attrs).width
+        self.cycleWidth = ((text + endMarker) as NSString).size(withAttributes: attrs).width
+    }
+
+    /// Sawtooth offset with a flat tail: scroll across `cycleWidth` over
+    /// `cycleWidth / speed` seconds, then pause for `pauseDuration` with
+    /// the end marker fully revealed, then repeat.
+    func offset(at date: Date) -> CGFloat {
+        guard cycleWidth > 0 else { return 0 }
+        let elapsed = date.timeIntervalSince(startTime)
+        let scrollDuration = Double(cycleWidth) / speed
+        let totalDuration = scrollDuration + pauseDuration
+        let phase = elapsed.truncatingRemainder(dividingBy: totalDuration)
+        if phase < scrollDuration {
+            return -CGFloat(phase / scrollDuration) * cycleWidth
+        } else {
+            return -cycleWidth
+        }
+    }
+}
+
+/// A single-line horizontally scrolling text. If it fits its container, it
+/// renders statically (right-aligned); otherwise it scrolls left, pauses on
+/// an in-line `END` marker, and repeats forever.
+private struct MarqueeText: View {
+    @StateObject private var controller: MarqueeController
+
+    init(text: String, uiFont: UIFont) {
+        self._controller = StateObject(
+            wrappedValue: MarqueeController(text: text, uiFont: uiFont)
+        )
+    }
+
+    var body: some View {
+        // Invisible Text without `.fixedSize()` provides the natural
+        // single-line height and accepts any proposed width — bounding our
+        // outer size so we can never push the row off-screen.
+        Text(controller.text)
+            .font(Font(controller.uiFont))
+            .lineLimit(1)
+            .opacity(0)
+            .overlay {
+                GeometryReader { geo in
+                    content(containerWidth: geo.size.width)
+                }
+            }
+            .clipped()
+    }
+
+    @ViewBuilder
+    private func content(containerWidth: CGFloat) -> some View {
+        if controller.textWidth <= containerWidth {
+            // Fits → static, right-aligned.
+            Text(controller.text)
+                .font(Font(controller.uiFont))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        } else {
+            // Overflow → scroll. Two `text + END` pairs back-to-back hide
+            // the seam when the offset wraps.
+            TimelineView(.animation) { context in
+                HStack(spacing: 0) {
+                    pair
+                    pair
+                }
+                .offset(x: controller.offset(at: context.date))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var pair: some View {
+        HStack(spacing: 0) {
+            Text(controller.text)
+                .font(Font(controller.uiFont))
+                .fixedSize()
+                .lineLimit(1)
+            Text(controller.endMarker)
+                .font(Font(controller.uiFont))
+                .fixedSize()
+                .lineLimit(1)
+                .foregroundStyle(.tertiary)
+        }
     }
 }
 
