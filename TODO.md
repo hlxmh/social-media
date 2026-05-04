@@ -89,6 +89,57 @@ drag the page dots) so users can reorder collages within a post and delete
 individual ones from a list. Reuse `viewModel.collages` array with a
 `.move(fromOffsets:toOffset:)` operation.
 
+## Digital log UI: NotificationsView
+Highest-impact / smallest scope. Mirrors feed row structure directly:
+- Drop system `List` and purple SF Symbol icon.
+- Each notification → a log row: left bracket (green dot for unread), `@handle
+  started following you`, relative time right-aligned. Same monospaced voice as
+  `LogRowView`.
+- Title stamp at top: `ACTIVITY LOG` in kerned monospaced caps, same style as
+  `FEED` header.
+- Add `ScanlineOverlay` behind the list.
+
+## Digital log UI: SearchView
+- Replace `List` + `Section` with `LazyVStack` inside a `ScrollView`, same
+  structure as `FeedView.log`.
+- Each user row: left bracket bar colored by `avatarHue`, `@handle`,
+  follower count right-aligned. No avatar circle — handles are the identity.
+- Section header `WHO TO FOLLOW` in kerned monospaced caps.
+- Scanlines over the full list.
+- Style the `.searchable()` placeholder as `> search handles...`.
+
+## Digital log UI: PostDetailView
+- Replace author header with a single monospaced metadata bar:
+  `@ada  ·  today  ·  2 collages` — same typographic voice as the feed row.
+- Move the `N / M` collage counter into that header bar, left or center.
+- Add a thin left-edge bracket to the text/caption section below the collage,
+  same 3pt colored bar as `LogRowView`, anchoring the text to the log language.
+- Replace generic paging dots with an inline text counter: `[ 1 — 2 ]`.
+- Add `ScanlineOverlay` behind the caption section.
+
+## Digital log UI: ProfileView
+- Strip the circle avatar or reduce to a small monogram square.
+- Render the header as a structured data block:
+  ```
+  ADA LOVELACE
+  @ada  ·  4,213 followers  ·  88 following
+  ─────────────────────────────────────────
+  Notes on the Analytical Engine.
+  ```
+- Follow button becomes a monospaced `[ FOLLOW ]` / `[ FOLLOWING ]` bracket
+  button — no capsule fill.
+- Replace the Polaroid thumbnail grid with a tight 3-column square grid.
+  Each thumbnail has a monospaced date beneath: `APR 28`. No tilt.
+- Add `ScanlineOverlay` over the grid area only (not the header block).
+
+## Digital log UI: RootView / tab bar
+- Override tab bar tint to a single crisp color (primary or the green from
+  the unread dot) rather than the default blue accent.
+- Rename tabs to shorter, monospaced-feeling labels: `LOG / FIND / ALERTS / YOU`,
+  or switch to icon-only.
+- Consider making the floating `+` button square with cropped corners instead
+  of fully circular, to match the blockier visual language.
+
 ## Variable row weight by recency (feed)
 The most recent entry in the digital log should visually dominate — taller row,
 higher photo opacity, slightly larger typography. Older entries compress. This
