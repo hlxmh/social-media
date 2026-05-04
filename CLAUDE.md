@@ -94,8 +94,9 @@ micro-blog/
 Post
   id: UUID
   authorId: UUID
-  day: Date          ← always start-of-day (Calendar.current.startOfDay)
+  day: Date                    ← always start-of-day (Calendar.current.startOfDay)
   collages: [Collage]
+  isViewedByCurrentUser: Bool  ← annotated by MockBackend.feed(); drives the unread dot in LogRowView
 
 Collage
   id: UUID
@@ -104,6 +105,7 @@ Collage
   border: BorderStyle    ← frame (none|polaroid|filmStrip|tornPaper) + gutterColor + gutterWidth
   overlays: [OverlayElement]
   text: String           ← the journal body shown below the collage in PostDetailView
+                            also scrolled as a marquee in LogRowView
 
 CollageCell
   id: UUID
@@ -120,6 +122,10 @@ OverlayElement
 LayoutPreset.cellRects(inset:gutterX:gutterY:) -> [CGRect]
   ← Returns NORMALIZED CGRects (0...1). gutterX is normalized to canvas width,
     gutterY to canvas height. Used by CollageView and PostEditorView.PresetIcon.
+
+Date extension (Post.swift)
+  .dayKey     → Calendar.current.startOfDay(for: self)
+  .offset(days:) → Calendar.current.date(byAdding: .day, value: days, to: self)
 ```
 
 ---
@@ -226,49 +232,101 @@ click the ▶︎ button for Live mode. Files with previews:
 
 ---
 
-## Design direction: Feed screen (digital log)
+## Feed screen: digital log design
 
-The feed is being redesigned away from the Polaroid thumbnail grid toward a
-**dense, block-y digital log**. Guiding principles:
+The feed is a **dense, block-y digital log** — not a Polaroid grid.
 
-- **~8 entries visible at once** on a standard iPhone screen without scrolling.
-  Each row is compact — no large thumbnails.
-- **One row per friend**, not one row per collage. The row reflects the friend's
-  most recent post, regardless of how many collages it contains.
-- **Sorted newest-first** by the post's `updatedAt` (or `day`).
-- **Unread indicator**: a small solid green dot on rows where the current user
-  has not yet opened the post. Dot disappears after the post is tapped/viewed.
-- **Aesthetic**: modular, monospaced or tight-sans typography, clear visual
-  rhythm, "terminal log" or "system readout" energy — not soft/rounded.
+### LogRowView anatomy (top → bottom, left → right)
 
-**Confirmed design decisions:**
+```
+[ 3pt bracket (green=unread / muted=seen) ]
+[ 6pt green dot (hidden when seen) ]
+[ VStack:
+    @handle                                   16h
+    first-collage text ← scrolling marquee →
+    N collages  (only if >1)                      ]
+```
+
+Full-bleed background: first non-nil photo across all collages, `scaledToFill`,
+low opacity (0.32 unread / 0.18 seen), clipped via `.clipped()` on the HStack
+**after** `.background { }` — NOT inside the background closure.
+
+### Seen/unread flow
+
+1. `MockBackend.feed()` annotates each `Post` with `isViewedByCurrentUser`.
+2. `FeedViewModel.markViewed(_:)` updates the local array immediately (instant
+   dot disappear) and calls `backend.markPostViewed(postId:)` asynchronously.
+3. Tapping a row triggers `markViewed` via `.simultaneousGesture(TapGesture())`.
+
+### Marquee scrolling (LogRowView / MarqueeText)
+
+The first collage's `text` field scrolls right-to-left when it overflows the
+available width. Architecture follows Monty Harper's external-controller pattern:
+
+- **`MarqueeController: ObservableObject`** — owns `startTime`, character widths
+  (measured via `UIFont`/`NSString.size(withAttributes:)` synchronously at init),
+  and the `offset(at:Date) -> CGFloat` sawtooth function with end-of-line pause.
+- **`MarqueeText: View`** — holds `@StateObject var controller`. The outer view
+  is a dimensionless invisible `Text` (no `.fixedSize()`) so it can never push
+  the row wider than its container. The actual scrolling text lives in an
+  `.overlay { GeometryReader }` that decides static-vs-scroll based on
+  `controller.textWidth` vs available width.
+- **Why external controller**: SwiftUI destroys and recreates view structs
+  frequently (especially in `LazyVStack`). `@State startTime` inside the view
+  resets to `Date()` on each recreation, resetting the animation. An
+  `ObservableObject` held via `@StateObject` is kept alive by SwiftUI across
+  view rebuilds.
+- Cycle: scroll → `· END ·` marker appears → 1.2 s pause → seamless repeat
+  (two `text + END` pairs are rendered back-to-back to hide the seam).
+
+### MockBackend.seed() — followed users and their posts
+
+| User | Followed | Photos used |
+|---|---|---|
+| ada | ✓ | Frank_Ocean_1 · 334 · 613 · 691 |
+| grace | ✓ | 334 · 613 · 691 · 839 |
+| alan | ✓ | 839 · 613 · 691 · Frank_Ocean_1 |
+| katherine | ✓ | 18 · 839 · 691 |
+| jean | ✓ | 18 · 613 |
+| margaret | ✗ | 691 · 613 |
+| donald | ✗ | 334 |
+
+### photo() lookup
+
+`MockBackend.photo(_:)` tries bundle root first, then `MockPhotos/` subdirectory,
+for both `.jpg` and `.jpeg`. This handles XcodeGen bundling the folder either as
+individual file references (flat) or as a directory copy (subdirectoried). Do not
+simplify this to a single lookup.
+
+### Confirmed design decisions
 
 | Decision | Choice |
 |---|---|
-| Row content | Handle (`@username`) · relative date · mini square thumbnail (~44pt) · collage count badge |
-| Seen trigger | Tap — dot clears when the user navigates into the post |
-| Typography | Monospaced throughout |
+| Seen trigger | Tap row → navigate into post |
+| Typography | Monospaced throughout (`Font.system(.X, design: .monospaced)`) |
 | Color | Adaptive (system light / dark) |
-| Row separator | Filled block/card background **+** left-edge vertical bracket marker |
-| Own post in feed | No — your post lives on your profile only |
-| Friends with no posts | Hidden — only friends who have posted at least once appear |
-| Sort order | Latest `post.day` / `updatedAt` per friend, newest first |
-| Deduplication | One row per friend; always reflects their most recent post |
+| Row separator | Filled block background + left-edge 3pt bracket + 0.5pt bottom hairline |
+| Own post in feed | No — profile only |
+| Friends with no posts | Hidden |
+| Sort order | Latest `post.day` per friend, newest first |
+| Deduplication | One row per friend; their most recent post only |
 
 ---
 
 ## Active TODO (abridged — see TODO.md for full detail)
 
 1. **Rename app to Kologe** — project.yml, bundle ID, source folder, `@main` struct, all user-facing strings
-2. Implement invite-only sign-up
-3. UI overhaul (typography tokens, tab bar reconsider, editor polish)
-4. Cell pan / zoom (photo crop inside a cell)
-5. Reorderable collages within a post
-6. Archive / calendar view on profile
-7. Tags / moods per post
-8. Profile themes
-9. Collaborative posts
-10. Polish filmstrip frame with `Canvas`-drawn sprockets
+2. **Uniform feed row height** — move the "N collages" line so all rows are the same pixel height
+3. Implement invite-only sign-up
+4. UI overhaul (typography tokens, tab bar reconsider, editor polish)
+5. Cell pan / zoom (photo crop inside a cell)
+6. Reorderable collages within a post
+7. Archive / calendar view on profile
+8. Tags / moods per post
+9. Profile themes
+10. Collaborative posts
+11. Video support in collage cells
+12. Polish filmstrip frame with `Canvas`-drawn sprockets
 
 ---
 
@@ -279,3 +337,8 @@ The feed is being redesigned away from the Polaroid thumbnail grid toward a
 - **Gesture pass-through**: any `.onTapGesture` attached unconditionally (even with an empty closure) will swallow taps and prevent outer `NavigationLink`s from firing. Use an optional handler and only attach the gesture modifier when the handler is non-nil.
 - **`MagnifyGesture` / `RotateGesture`**: iOS 17 renamed these from `MagnificationGesture` / `RotationGesture`. Use the new names.
 - **Actor-isolated `currentUser`**: access via `backend.currentUser` (synchronous, nonisolated) everywhere. Do not `await` it.
+- **Background image clipping in SwiftUI**: `.clipped()` must be applied to the **parent view** *after* `.background { }`, not inside the background closure. Inside the closure the view has no established frame yet, so clipping is a no-op and `scaledToFill` images overflow.
+- **`scaledToFill` images in `LazyVStack` rows**: do not use `@State` computed images as the row background source if you can avoid it — images decode correctly when measured, but SwiftUI may not re-render the background layer on a recycled row. Prefer loading images synchronously into `CollageCell.image: Data?` and decoding fresh each time.
+- **`ViewThatFits` and `.fixedSize()`**: `ViewThatFits` measures children against the *proposed* size. If a child has `.fixedSize()`, it reports its natural width as its minimum — causing it to always "fit" even when the container is narrow, so the fallback child is never chosen. Use explicit width comparison (`naturalWidth <= containerWidth`) instead.
+- **Marquee / scrolling text**: animation state (`startTime`) must live in an `ObservableObject` held by `@StateObject`, not in `@State`. `@State` resets on every view struct re-initialization (common in `LazyVStack`); `@StateObject` survives rebuilds. See `MarqueeController` in `LogRowView.swift`.
+- **`UIFont` for text width measurement**: `(text as NSString).size(withAttributes: [.font: uiFont]).width` gives the rendered width synchronously without any layout pass. Use this in place of `PreferenceKey`-based measurement when you need the width at init time (e.g., in `MarqueeController`).

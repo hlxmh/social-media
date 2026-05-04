@@ -89,6 +89,29 @@ drag the page dots) so users can reorder collages within a post and delete
 individual ones from a list. Reuse `viewModel.collages` array with a
 `.move(fromOffsets:toOffset:)` operation.
 
+## Variable row weight by recency (feed)
+The most recent entry in the digital log should visually dominate — taller row,
+higher photo opacity, slightly larger typography. Older entries compress. This
+mirrors newspaper above-the-fold hierarchy and makes a sparse feed feel
+intentional rather than empty. Implementation notes:
+- Assign each row an `age` rank (0 = newest). Lerp row height from a tall
+  max (~100pt) down to a compact min (~56pt) based on rank or day delta.
+- Apply a matching opacity ramp to the background photo wash.
+- Cap the tall-row treatment to the top 1–2 entries so the rest stay compact.
+- Animate height changes when the feed refreshes (new post pushes old ones down).
+
+## Uniform feed row height
+The "N collages" subtitle in `LogRowView` is rendered as a third line in the
+meta column only when `post.collages.count > 1`, which makes those rows taller
+than single-collage rows and breaks the dense, modular feel of the digital log.
+Move the indicator somewhere that doesn't add a row. Options:
+- Inline with the time on the top line (e.g. `@ada   2▣  17h`).
+- A small sticker-stack glyph rendered in the row's right margin or as part
+  of the bracket on the left.
+- Drop the textual "collages" word entirely and use only a count + icon.
+Acceptance: every row in the feed is the same pixel height regardless of how
+many collages the post contains.
+
 ## Video support
 Allow short videos in collage cells alongside photos. Scope:
 - Extend `CollageCell` from `image: Data?` to a richer `media: CellMedia`
@@ -110,3 +133,5 @@ The current `.filmStrip` frame uses HStacks of rounded rectangles for sprocket
 holes — visible seams when the canvas size doesn't divide evenly. Replace
 with a `Canvas`-drawn frame that lays out sprockets parametrically and looks
 crisp at any size. Bonus: subtle grain texture on top.
+
+## Move stale data to bottom of list
